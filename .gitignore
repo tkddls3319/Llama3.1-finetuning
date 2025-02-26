@@ -6,7 +6,7 @@ __pycache__/
 # C extensions
 *.so
 
-echo "llama.cpp/" >> .gitignore
+echo llama.cpp/ >> .gitignore
 
 # Distribution / packaging
 .Python
