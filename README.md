@@ -1,5 +1,7 @@
 ## 02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요
 
+좀 더 자세한 설명은 https://usingsystem.tistory.com/560 에 있습니다.
+
 
 # Llama 3.1 LoRA 기반 PEFT 적용 가이드
 
