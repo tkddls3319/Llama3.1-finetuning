@@ -1,6 +1,7 @@
-# 02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요
+## 02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요
 
-# 🌟 Llama 3.1 LoRA 기반 PEFT 적용 가이드
+
+# Llama 3.1 LoRA 기반 PEFT 적용 가이드
 
 LoRA (Low-Rank Adaptation)는 LLM(대형 언어 모델)의 일부 파라미터만 미세 조정하여 메모리와 계산량을 절약하는 파인튜닝 기법입니다.
 
