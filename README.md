@@ -2,7 +2,7 @@
 
 1. **02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요.**
 
-2. 02_Scripts폴더에 `TrainSFT.py`라는 **LLaMA, EXAONE, Gemma 등의 대형 언어 모델(LLM)** 을 **LoRA(저비용 적응 학습) 방식으로 미세 조정(Fine-tuning)** 하고, 학습된 모델을 병합 및 활용할 수 있는 Python 스크립트를 추가하였습니다. 또한 학습된 모델을 병합하고 **챗봇 응답 생성**까지 지원합니다.
+2. 02_Scripts폴더에 `TrainSFT.py`라는 **LLaMA, EXAONE, Gemma 등의 대형 언어 모델(LLM)** 을 **LoRA(저비용 적응 학습) 방식으로 미세 조정(Fine-tuning)** 하고, 학습된 모델을 병합 및 활용할 수 있는 Python 스크립트를 추가하였습니다. 또한 학습된 모델을 병합하고 **챗봇 응답 생성**까지 지원합니다. **모든 모델은 ModelType으로 관리됩니다.**
 
 좀 더 자세한 설명은 https://usingsystem.tistory.com/560 에 있습니다.
 
@@ -17,7 +17,7 @@
 from TrainSFT import trainSFT
 
 model, tokenizer = trainSFT(
-    model_id="meta-llama/Llama-3.1-8B-Instruct",
+    ModelType.META_LLAMA3_1_8B_INSTRUCT,
     train_data_path="./data/train.json",
     test_data_path="./data/val.json",
     batch_size=4,
@@ -41,7 +41,7 @@ model, tokenizer = trainSFT(
 from TrainSFT import merge_lora_model_save
 
 merge_lora_model_save(
-    model_id="meta-llama/Llama-3.1-8B-Instruct",
+    ModelType.META_LLAMA3_1_8B_INSTRUCT,
     lora_path="./saved_models/LoRA",
     save_path="./final_models/Llama-3-8B-LoRA"
 )
@@ -56,7 +56,7 @@ from TrainSFT import chat_response
 
 response = chat_response(
     model, tokenizer,
-    user_input="What is the capital of France?"
+    user_input="지구에 대해 설명해줘."
 )
 print(response)
 ```
