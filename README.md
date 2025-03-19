@@ -1,8 +1,8 @@
 ## 사용방법
 
-1. 02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요
+1. **02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요.**
 
-2. 02_Scripts폴더에 `TrainSFT.py`라는 **LLaMA, EXAONE, Gemma 등의 대형 언어 모델(LLM)**을 **LoRA(저비용 적응 학습) 방식으로 미세 조정(Fine-tuning)**하고, 학습된 모델을 병합 및 활용할 수 있는 Python 스크립트를 추가하였습니다. 또한 학습된 모델을 병합하고 **챗봇 응답 생성**까지 지원합니다.
+2. 02_Scripts폴더에 `TrainSFT.py`라는 **LLaMA, EXAONE, Gemma 등의 대형 언어 모델(LLM)** 을 **LoRA(저비용 적응 학습) 방식으로 미세 조정(Fine-tuning)** 하고, 학습된 모델을 병합 및 활용할 수 있는 Python 스크립트를 추가하였습니다. 또한 학습된 모델을 병합하고 **챗봇 응답 생성**까지 지원합니다.
 
 좀 더 자세한 설명은 https://usingsystem.tistory.com/560 에 있습니다.
 
