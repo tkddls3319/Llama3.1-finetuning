@@ -1,6 +1,65 @@
-## 02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요
+## 사용방법
+
+1. 02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요
+
+2. 02_Scripts폴더에 `TrainSFT.py`라는 **LLaMA, EXAONE, Gemma 등의 대형 언어 모델(LLM)**을 **LoRA(저비용 적응 학습) 방식으로 미세 조정(Fine-tuning)**하고, 학습된 모델을 병합 및 활용할 수 있는 Python 스크립트를 추가하였습니다. 또한 학습된 모델을 병합하고 **챗봇 응답 생성**까지 지원합니다.
 
 좀 더 자세한 설명은 https://usingsystem.tistory.com/560 에 있습니다.
+
+## TrainSFT.py 사용방법
+### 1️⃣ 모델 로드 및 양자화 지원 (4-bit / 8-bit)
+
+- `AutoModelForCausalLM.from_pretrained()`을 사용하여 **LLaMA, EXAONE, Gemma** 등 다양한 모델 로드
+- `BitsAndBytesConfig`를 이용한 **4-bit 양자화** 지원 (`bnb_config`)
+- 양자화 모델 훈련을 위한 `prepare_model_for_kbit_training()` 적용
+- `gradient_checkpointing_enable()`을 사용하여 **VRAM 절약**
+```python
+from TrainSFT import trainSFT
+
+model, tokenizer = trainSFT(
+    model_id="meta-llama/Llama-3.1-8B-Instruct",
+    train_data_path="./data/train.json",
+    test_data_path="./data/val.json",
+    batch_size=4,
+    epochs=2,
+    learning_rate=5e-5,
+    wandb_key="my_wandb_api_key"
+)
+```
+
+### 2️⃣ LoRA 기반 미세 조정 (Fine-Tuning)
+
+- `LoraConfig`를 활용하여 **특정 가중치만 업데이트**하여 메모리 사용량을 줄이고 빠르게 학습 가능
+- `SFTTrainer`를 활용하여 **LoRA 방식**으로 모델 학습
+- 학습 데이터셋을 **Chat 형식**에 맞게 변환 후 훈련
+
+### 3️⃣ 학습된 모델 저장 및 병합
+
+- 학습된 LoRA 모델을 원본 모델과 병합하는 `merge_lora_model()`, `merge_lora_model_save()`
+- 병합된 모델을 저장하여 **추론 시 LoRA 없이 모델 실행 가능**
+```python
+from TrainSFT import merge_lora_model_save
+
+merge_lora_model_save(
+    model_id="meta-llama/Llama-3.1-8B-Instruct",
+    lora_path="./saved_models/LoRA",
+    save_path="./final_models/Llama-3-8B-LoRA"
+)
+```
+
+### 4️⃣ 챗봇 응답 생성
+
+- `chat_response()` 함수를 통해 **훈련된 모델을 사용하여 채팅 스타일 응답 생성**
+- 다양한 모델별 템플릿(`chat_templates`)을 적용하여 **적절한 챗봇 스타일 유지**
+```python
+from TrainSFT import chat_response
+
+response = chat_response(
+    model, tokenizer,
+    user_input="What is the capital of France?"
+)
+print(response)
+```
 
 
 # Llama 3.1 LoRA 기반 PEFT 적용 가이드
