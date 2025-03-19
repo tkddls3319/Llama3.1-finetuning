@@ -73,6 +73,9 @@ def trainSFT(model_type = ModelType.META_LLAMA3_1_8B_INSTRUCT, use_quantization 
             lorar = 8, loraa = 16, loradropout = 0.05, 
             epochs= 2, batch_size = 4, gradient_step = 2, learning_rate = 1e-4):
 
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+    
     # 모델 ID 설정정
     model_id = get_model_id(model_type) 
 
@@ -204,9 +207,6 @@ def trainSFT(model_type = ModelType.META_LLAMA3_1_8B_INSTRUCT, use_quantization 
         )
     print('train start')
     # 학습 시작
-
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
 
     model.config.use_cache = False
     trainer.train()
