@@ -9,28 +9,72 @@ import os
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+# 모델별 Chat Template
+chat_templates = {
+    #EXAONE, LLAMA, GEMMA, ALPACA 외 다른 템플릿이 필요하면 추가
+    "EXAONE": """[|system|]You are EXAONE model from LG AI Research, a helpful assistant.[|endofturn|]
+
+[|user|]{INPUT}
+
+[|assistant|]{OUTPUT}[|endofturn|]""",
+
+    "LLAMA": """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+아래는 작업을 설명하는 지시사항입니다. 입력된 내용을 바탕으로 적절한 응답을 작성하세요.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{INPUT}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+{OUTPUT}<|eot_id|>""",
+
+    "GEMMA": """<start_of_turn>system
+### SYSTEM:
+아래는 작업을 설명하는 지시사항입니다. 입력된 내용을 바탕으로 적절한 응답을 작성하세요.
+<end_of_turn>
+<start_of_turn>user
+### INSTRUCTION:
+{INPUT}
+<end_of_turn>
+<start_of_turn>model
+### RESPONSE:
+{OUTPUT}
+<end_of_turn>""",
+
+    "ALPACA": """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
+
+### Instruction:
+{INPUT}
+
+### Response:
+{OUTPUT}""",
+}
+
 class ModelType(Enum):
-    EXAONE = "EXAONE"
-    LLAMA = "LLaMA"
+    # 모델이 추가되면 Enum에 적절하게 추가
+    LGAI_EXAONE3_5_8B_INSTRUCT = "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct"
+    META_LLAMA3_1_8B_INSTRUCT = "meta-llama/Llama-3.1-8B-Instruct"
+    UNSLOTH_LLAMA3_1_8B_INSTRUCT = "unsloth/Llama-3.1-8B-Instruct"
     GEMMA = "gemma"
     ALPACA = "Alpaca"
 
-def trainSFT(model_id ="meta-llama/Llama-3.1-8B-Instruct", use_quantization = True,
-            max_seq_length = 1024, wandb_key="", train_data_path="",
-            test_data_path="",  lorar = 8, loraa = 16, loradropout = 0.05, 
+def get_model_type(model_id: str):
+    """model_id를 기반으로 ModelType을 반환"""
+    for model_type in ModelType:
+        if model_type.value in model_id.lower():
+            return model_type
+    raise ValueError("지원되지 않는 모델입니다. 모델명을 확인하세요.")
+
+def get_model_id(model_type: ModelType):
+    """ModelType을 기반으로 model_id를 반환"""
+    return model_type.value
+
+#train_data_path와 test_data_path 추가하세요.
+def trainSFT(model_type = ModelType.META_LLAMA3_1_8B_INSTRUCT, use_quantization = True, max_seq_length = 1024,
+            wandb_project = 'fintuning', wandb_key="", 
+            train_data_path="", test_data_path="",
+            lorar = 8, loraa = 16, loradropout = 0.05, 
             epochs= 2, batch_size = 4, gradient_step = 2, learning_rate = 1e-4):
 
-    # 모델 타입 설정
-    if 'exaone' in model_id.lower():
-        model_type = ModelType.EXAONE
-    elif 'llama' in model_id.lower():
-        model_type = ModelType.LLAMA
-    elif 'gemma' in model_id.lower():
-        model_type = ModelType.GEMMA
-    elif 'alpaca' in model_id.lower():
-        model_type = ModelType.ALPACA
-    else:
-        print("모델명을 확인해 주세요.")
+    # 모델 ID 설정정
+    model_id = get_model_id(model_type) 
 
     #  양자화 설정 (사용할 경우)
     if use_quantization:
@@ -52,7 +96,7 @@ def trainSFT(model_id ="meta-llama/Llama-3.1-8B-Instruct", use_quantization = Tr
         device_map="auto",  # 자동으로 GPU 할당
         torch_dtype=torch_dtype,  # 양자화 안 하면 bfloat16 적용
         quantization_config=quantization_config,  # 양자화 적용 여부
-        trust_remote_code= True if ModelType.EXAONE else False,  # 원격 코드 신뢰 여부
+        trust_remote_code= True if model_id.lower() in 'EXAONE' else False,  # 원격 코드 신뢰 여부
       )
     if use_quantization:
         model = prepare_model_for_kbit_training(model) # 양자화 모델을 훈련할 수 있도록
@@ -93,9 +137,8 @@ def trainSFT(model_id ="meta-llama/Llama-3.1-8B-Instruct", use_quantization = Tr
     print(f"Loraconfig Loaded")
 
     # 저장 폴더 설정
-    wandb_project = f"finetuning"
     outName = f"{model_id.split('/')[-1]}-{epochs}-{batch_size}-{gradient_step}-{learning_rate}-{lorar}-{loraa}-{loradropout}"
-    output_dir = f"../01_Models/01_RoLaModels/{outName}"
+    output_dir = f"./99_GitLoss/01_RoLaModels/{outName}"
 
     # 학습 설정
     train_args = TrainingArguments(
@@ -116,8 +159,8 @@ def trainSFT(model_id ="meta-llama/Llama-3.1-8B-Instruct", use_quantization = Tr
         learning_rate=learning_rate,
         lr_scheduler_type="linear",
 
-        fp16=False,
-        bf16=True,
+        fp16=True,
+        bf16=False,
 
         weight_decay = 0.01,
 
@@ -159,7 +202,6 @@ def trainSFT(model_id ="meta-llama/Llama-3.1-8B-Instruct", use_quantization = Tr
                 "num_train_epochs": epochs
             }
         )
-
     print('train start')
     # 학습 시작
 
@@ -179,12 +221,12 @@ def trainSFT(model_id ="meta-llama/Llama-3.1-8B-Instruct", use_quantization = Tr
     model.config.use_cache = True  # 이전 계산 결과를 저장하고 사용	추론 속도 빨라짐, 메모리 사용 증가
     return model, tokenizer
 
-
-def merge_lora_model(model_id, lora_path):
+def merge_lora_model(model_type:ModelType, lora_path: str ):
     """
     LoRA 모델을 로드하고 원래 모델과 병합.
     """
-    model_id = model_id
+    # 모델 ID 설정정
+    model_id = get_model_id(model_type) 
     peft_model_id = lora_path
 
     base_model = AutoModelForCausalLM.from_pretrained(
@@ -200,11 +242,11 @@ def merge_lora_model(model_id, lora_path):
 
     return merged_model, tokenizer
 
-def merge_lora_model_save(model_id, lora_path, save_path):
+def merge_lora_model_save(model_type : ModelType, lora_path: str, save_path: str):
     """
     LoRA 모델을 로드하고 원래 모델과 병합한 후 저장하는 함수.
     """
-    merged_model, tokenizer = merge_lora_model(model_id, lora_path)
+    merged_model, tokenizer = merge_lora_model(model_type, lora_path)
 
     merged_model.save_pretrained(save_path)
     tokenizer.save_pretrained(save_path)
@@ -258,58 +300,25 @@ def chat_response(model, tokenizer, user_input, system_prompt="You are a bot tha
 
     return response
 
-# 모델별 Chat Template
-chat_templates = {
-    ModelType.EXAONE: """[|system|]You are EXAONE model from LG AI Research, a helpful assistant.[|endofturn|]
-
-[|user|]{INPUT}
-
-[|assistant|]{OUTPUT}[|endofturn|]""",
-
-    ModelType.LLAMA: """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-아래는 작업을 설명하는 지시사항입니다. 입력된 내용을 바탕으로 적절한 응답을 작성하세요.<|eot_id|><|start_header_id|>user<|end_header_id|>
-
-{INPUT}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-
-{OUTPUT}<|eot_id|>""",
-
-    ModelType.GEMMA: """<start_of_turn>system
-### SYSTEM:
-아래는 작업을 설명하는 지시사항입니다. 입력된 내용을 바탕으로 적절한 응답을 작성하세요.
-<end_of_turn>
-<start_of_turn>user
-### INSTRUCTION:
-{INPUT}
-<end_of_turn>
-<start_of_turn>model
-### RESPONSE:
-{OUTPUT}
-<end_of_turn>""",
-
-    ModelType.ALPACA: """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
-
-### Instruction:
-{INPUT}
-
-### Response:
-{OUTPUT}""",
-}
-
-def format_dataset(model_name: ModelType, train_data_files, test_data_files=None):
+def format_dataset(model_type: ModelType, train_data_files : str, test_data_files=None):
     """
     Returns:
         tuple: 변환된 (train_dataset, test_dataset) - test_dataset은 없을 경우 None 반환
     """
-    if model_name not in chat_templates:
-        raise ValueError(f"지원되지 않는 모델명입니다: {model_name}")
+
+    for key in chat_templates:
+        if key in model_type.name:
+            matched_template = chat_templates[key]
+            break
+    
+    if matched_template is None:
+        raise ValueError(f"지원되지 않는 모델명입니다: {model_type}")
 
     # 모델별 템플릿 선택
-    chat_template = chat_templates[model_name]
-
     def formatting_prompts_func(examples):
         """각 데이터 샘플에 템플릿 적용"""
         return {
-            "text": chat_template.format(
+            "text": matched_template.format(
                 INPUT=examples["instruction"].strip(),
                 OUTPUT=examples["output"].strip()
             )
