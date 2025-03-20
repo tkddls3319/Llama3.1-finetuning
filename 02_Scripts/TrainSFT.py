@@ -30,39 +30,19 @@ def get_model_id(model_type: ModelType):
 
 def train_sft(model_type = ModelType.META_LLAMA3_1_8B_INSTRUCT, use_quantization = True, max_seq_length = 1024,
             wandb_project = 'fintuning', wandb_key="", 
-            train_data_path="./00_Data/final_optimized_testjson.json", test_data_path="./00_Data/validation_testjson.json",
+            train_data_path="", test_data_path="",
             lorar = 8, loraa = 16, loradropout = 0.05, 
             epochs= 2, batch_size = 4, gradient_step = 2, learning_rate = 1e-4):
 
-    del model
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
     
-    # 모델 ID 설정정
+    # 모델 ID 설정
     model_id = get_model_id(model_type) 
 
-    #  양자화 설정 (사용할 경우)
-    if use_quantization:
-        bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,  # 4-bit 양자화 활성화
-        bnb_4bit_use_double_quant=True,  # 이중 양자화 적용
-        bnb_4bit_quant_type="nf4",  # nf4 양자화 방식 사용
-        bnb_4bit_compute_dtype=torch.bfloat16,  # 연산 시 bfloat16 사용
-        )
-        torch_dtype = None  # 양자화 시에는 torch_dtype 사용하지 않음
-        quantization_config = bnb_config  # 양자화 적용
-    else:
-        torch_dtype = torch.bfloat16  # 일반 로드 시 bfloat16 사용
-        quantization_config = None  # 양자화 없음
+    # 모델 로드
+    model, tokenizer = model_load( model_type, use_quantization)
 
-    # 모델 및 토크나이져 로드
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        device_map="auto",  # 자동으로 GPU 할당
-        torch_dtype=torch_dtype,  # 양자화 안 하면 bfloat16 적용
-        quantization_config=quantization_config,  # 양자화 적용 여부
-        trust_remote_code= True if 'exaone' in model_id.lower() else False  # 원격 코드 신뢰 여부
-      )
     if use_quantization:
         model = prepare_model_for_kbit_training(model) # 양자화 모델을 훈련할 수 있도록
     
@@ -174,15 +154,16 @@ def train_sft(model_type = ModelType.META_LLAMA3_1_8B_INSTRUCT, use_quantization
     trainer.train()
 
     # 모델 저장
-    saveLoRA_dir = f"{output_dir}/LoRA"
+    saveLoRA_dir = f"{output_dir}/lora_model"
     trainer.model.save_pretrained(saveLoRA_dir)
     print(f"[info] 로라 어뎁터 저장 {saveLoRA_dir}")
 
     model.eval() # 모델의 가중치는 변경하지 않고, forward 연산만 수행함.
     model.config.use_cache = True  # 이전 계산 결과를 저장하고 사용	추론 속도 빨라짐, 메모리 사용 증가
+    
     return model, tokenizer, output_dir
 
-def model_load(model_type:ModelType, use_quantization = False):
+def model_load(model_type:ModelType, use_quantization:bool):
     """
     모델 로드.
     """
@@ -206,16 +187,16 @@ def model_load(model_type:ModelType, use_quantization = False):
     # 모델 및 토크나이져 로드드
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        device_map="cuda",  # 자동으로 GPU 할당
+        device_map="auto",  # 자동으로 GPU 할당
         torch_dtype=torch_dtype,  # 양자화 안 하면 bfloat16 적용
         quantization_config=quantization_config,  # 양자화 적용 여부
-        trust_remote_code= True if  'exaone' in model_id.lower() else False,  # 원격 코드 신뢰 여부
+        trust_remote_code= True if 'exaone' in model_id.lower() else False,  # 원격 코드 신뢰 여부
       )
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
     return model, tokenizer
 
-def lora_model_load(model_type:ModelType, lora_path: str, use_quantization = False):
+def lora_model_load(model_type:ModelType, lora_path: str, use_quantization :bool):
     """
     LoRA 모델을 로드.
     """
@@ -225,7 +206,7 @@ def lora_model_load(model_type:ModelType, lora_path: str, use_quantization = Fal
 
     return model, tokenizer
 
-def merge_lora_model_load(model_type:ModelType, lora_path: str, use_quantization = False):
+def merge_model_load(model_type:ModelType, lora_path: str, use_quantization :bool):
     """
     LoRA 모델을 로드하고 원래 모델과 병합.
     """
@@ -235,18 +216,24 @@ def merge_lora_model_load(model_type:ModelType, lora_path: str, use_quantization
 
     return merged_model, tokenizer
 
-def merge_lora_model_save(model_type : ModelType, lora_path: str, save_path: str):
+def merge_model_load_save(model_type : ModelType, lora_path: str, save_path: str):
     """
     LoRA 모델을 로드하고 원래 모델과 병합한 후 저장하는 함수.
     """
-    merged_model, tokenizer = merge_lora_model_load(model_type, lora_path)
+    merged_model, tokenizer = merge_model_load(model_type, lora_path, False)
 
-    merged_model.save_pretrained(save_path)
-    tokenizer.save_pretrained(save_path)
+    model_save(merged_model, tokenizer, save_path)
 
     print(f"모델 병합 및 저장 완료: {save_path}")
 
     return merged_model, tokenizer
+
+def model_save(model, tokenizer, save_path: str):
+    """
+    모델 저장.
+    """
+    model.save_pretrained(save_path)
+    tokenizer.save_pretrained(save_path)
 
 def chat_response(model, tokenizer, user_input, system_prompt="You are a bot that responds to weather queries." , max_tokens=1024, do_sample=False):
     """
