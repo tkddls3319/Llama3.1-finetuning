@@ -2,11 +2,13 @@
 
 1. **02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요.**
 
-2. 02_Scripts폴더에 `TrainSFT.py`라는 **LLaMA, EXAONE, Gemma 등의 대형 언어 모델(LLM)** 을 **LoRA(저비용 적응 학습) 방식으로 미세 조정(Fine-tuning)** 하고, 학습된 모델을 병합 및 활용할 수 있는 Python 스크립트를 추가하였습니다. 또한 학습된 모델을 병합하고 **챗봇 응답 생성**까지 지원합니다. **모든 모델은 ModelType으로 관리됩니다.**
+2. 02_Scripts폴더에 `peft_trainer.py`라는 **LLaMA, EXAONE, Gemma 등의 대형 언어 모델(LLM)** 을 **LoRA(저비용 적응 학습) 방식으로 미세 조정(Fine-tuning)** 하고, 학습된 모델을 병합 및 활용할 수 있는 Python 스크립트를 추가하였습니다. 또한 학습된 모델을 병합하고 **챗봇 응답 생성**까지 지원합니다. **모든 모델은 ModelType으로 관리됩니다.**
+
+3. unsloth 사용 방법에 대한 unsloth_Llama-3.1.ipynb, peft_unsloth_trainer.py 추가 하였습니다.
 
 좀 더 자세한 설명은 https://usingsystem.tistory.com/560 에 있습니다.
 
-## TrainSFT.py 사용방법
+## peft_trainer.py 사용방법
 ### 1️⃣ 모델 로드 및 양자화 지원 (4-bit / 8-bit)
 
 - `AutoModelForCausalLM.from_pretrained()`을 사용하여 **LLaMA, EXAONE, Gemma** 등 다양한 모델 로드
@@ -14,7 +16,7 @@
 - 양자화 모델 훈련을 위한 `prepare_model_for_kbit_training()` 적용
 - `gradient_checkpointing_enable()`을 사용하여 **VRAM 절약**
 ```python
-from TrainSFT import trainSFT
+from peft_trainer import trainSFT
 
 model, tokenizer = trainSFT(
     ModelType.META_LLAMA3_1_8B_INSTRUCT,
@@ -30,7 +32,7 @@ model, tokenizer = trainSFT(
 ### 2️⃣ LoRA 기반 미세 조정 (Fine-Tuning)
 
 - `LoraConfig`를 활용하여 **특정 가중치만 업데이트**하여 메모리 사용량을 줄이고 빠르게 학습 가능
-- `SFTTrainer`를 활용하여 **LoRA 방식**으로 모델 학습
+- `peft_trainer`를 활용하여 **LoRA 방식**으로 모델 학습
 - 학습 데이터셋을 **Chat 형식**에 맞게 변환 후 훈련
 
 ### 3️⃣ 학습된 모델 저장 및 병합
