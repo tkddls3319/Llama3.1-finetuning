@@ -30,7 +30,7 @@ def get_model_id(model_type: ModelType):
 
 def train_sft(model_type = ModelType.META_LLAMA3_1_8B_INSTRUCT, use_quantization = True, max_seq_length = 1024,
             wandb_project = 'fintuning', wandb_key="", 
-            train_data_path="", test_data_path="",
+            train_data_path="./your data path.json", test_data_path="./your data path.json",
             lorar = 8, loraa = 16, loradropout = 0.05, 
             epochs= 2, batch_size = 4, gradient_step = 2, learning_rate = 1e-4):
 
@@ -181,7 +181,7 @@ def model_load(model_type:ModelType, use_quantization:bool):
         torch_dtype = None  # 양자화 시에는 torch_dtype 사용하지 않음
         quantization_config = bnb_config  # 양자화 적용
     else:
-        torch_dtype = torch.float16   # 일반 로드 시 bfloat16,float16 사용
+        torch_dtype = torch.bfloat16   # 일반 로드 시 bfloat16,float16 사용
         quantization_config = None  # 양자화 없음
 
     # 모델 및 토크나이져 로드드
@@ -202,11 +202,11 @@ def lora_model_load(model_type:ModelType, lora_path: str, use_quantization :bool
     """
 
     base_model, tokenizer = model_load(model_type, use_quantization)
-    model  = PeftModel.from_pretrained(base_model, lora_path, device_map="cuda")
-
+    model  = PeftModel.from_pretrained(base_model, lora_path, device_map="auto")
+    print(model.peft_config)  # LoRA 설정이 잘 들어왔는지
     return model, tokenizer
 
-def merge_model_load(model_type:ModelType, lora_path: str, use_quantization :bool):
+def merge_model_load(model_type:ModelType, lora_path: str, use_quantization : False):
     """
     LoRA 모델을 로드하고 원래 모델과 병합.
     """
@@ -216,12 +216,13 @@ def merge_model_load(model_type:ModelType, lora_path: str, use_quantization :boo
 
     return merged_model, tokenizer
 
-def merge_model_load_save(model_type : ModelType, lora_path: str, save_path: str):
+def merge_model_load_save(model_type : ModelType, lora_path: str):
     """
     LoRA 모델을 로드하고 원래 모델과 병합한 후 저장하는 함수.
     """
     merged_model, tokenizer = merge_model_load(model_type, lora_path, False)
 
+    save_path = f'{lora_path}/merged'
     model_save(merged_model, tokenizer, save_path)
 
     print(f"모델 병합 및 저장 완료: {save_path}")
@@ -263,10 +264,11 @@ def chat_response(model, tokenizer, user_input, system_prompt="You are a bot tha
         return_tensors="pt"
     )
 
+
     # 모델 응답 생성
     with torch.no_grad():
         outputs = model.generate(
-            source.to("cuda"),
+            source.to(model.device),
             max_new_tokens=max_tokens,
             eos_token_id=tokenizer.eos_token_id,
             temperature=0.7,
