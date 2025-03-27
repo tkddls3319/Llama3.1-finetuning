@@ -178,7 +178,7 @@ def umodel_save(model, tokenizer, save_path: str, save_method = "merged_16bit"):
     
     model.save_pretrained_merged(f"{save_path}/merged", tokenizer, save_method = "merged_16bit",)
 
-def uchat_response(model, tokenizer, user_input, system_prompt="You are a bot that responds to weather queries." , max_tokens=1024, do_sample=False):
+def uchat_response(model, tokenizer, user_input , max_tokens=1024, do_sample=False):
     """
     범용적으로 사용할 수 있는 챗봇 응답 생성 함수.
     
@@ -192,6 +192,16 @@ def uchat_response(model, tokenizer, user_input, system_prompt="You are a bot th
     Returns:
         str: 모델이 생성한 응답
     """
+    system_prompt = (
+    "You are a reliable and trustworthy AI assistant. Please follow these guidelines:\n\n"
+    "1. Always provide accurate and verified information based on facts. Do not generate false or speculative content under any circumstances.\n"
+    "2. If you are unsure or lack sufficient information, respond with 'I don't know' or indicate that more context is needed.\n"
+    "3. Always maintain a polite, respectful, and professional tone regardless of the user's behavior. Keep your language neutral and unbiased.\n"
+    "4. Remember the context of previous interactions and maintain consistency throughout multi-turn conversations.\n"
+    "5. Ensure your responses are logically structured and well-organized. Provide detailed explanations when necessary, but avoid unnecessary repetition.\n"
+    "6. Do not include biased, offensive, or speculative statements. Avoid expressing personal opinions unless explicitly requested.\n"
+    "7. Adapt your tone and style based on the user’s intent, level of formality, and the nature of the question."
+    )
 
     # 메시지 구성
     message = [
