@@ -1,6 +1,6 @@
 import torch
 import wandb
-from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, BitsAndBytesConfig, Gemma3ForCausalLM
 from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training
 from datasets import load_dataset
 from trl import SFTTrainer
@@ -14,8 +14,13 @@ class ModelType(Enum):
     LGAI_EXAONE3_5_8B_INSTRUCT = "LGAI-EXAONE/EXAONE-3.5-7.8B-Instruct"
     META_LLAMA3_1_8B_INSTRUCT = "meta-llama/Llama-3.1-8B-Instruct"
     UNSLOTH_LLAMA3_1_8B_INSTRUCT = "unsloth/Llama-3.1-8B-Instruct"
-    GEMMA = "gemma"
+    GOOGLE_GEMMA3_12B_IT = "google/gemma-3-12b-it"
     ALPACA = "Alpaca"
+
+class LoraTarget(Enum):
+    SMALL = ["q_proj", "v_proj"]
+    NORMAL = ["q_proj", "o_proj", "k_proj", "v_proj"]
+    FULL = ["q_proj", "o_proj", "k_proj", "v_proj", "gate_proj", "up_proj", "down_proj"]
 
 def get_model_type(model_id: str):
     """model_id를 기반으로 ModelType을 반환"""
@@ -28,10 +33,10 @@ def get_model_id(model_type: ModelType):
     """ModelType을 기반으로 model_id를 반환"""
     return model_type.value
 
-def train_sft(model_type = ModelType.META_LLAMA3_1_8B_INSTRUCT, use_quantization = True, max_seq_length = 1024,
+def train_sft(model_type : ModelType, use_quantization = True, max_seq_length = 1024,
             wandb_project = 'fintuning', wandb_key="", 
-            train_data_path="./your data path.json", test_data_path="./your data path.json",
-            lorar = 8, loraa = 16, loradropout = 0.05, 
+            train_data_path="./00_Data/train_data_v6.json", test_data_path="./00_Data/eval_data_v6.json",
+            lorar = 8, loraa = 16, loradropout = 0.05, targetmodule = LoraTarget.FULL,
             epochs= 2, batch_size = 4, gradient_step = 2, learning_rate = 1e-4):
 
     torch.cuda.empty_cache()
@@ -76,12 +81,12 @@ def train_sft(model_type = ModelType.META_LLAMA3_1_8B_INSTRUCT, use_quantization
         r=lorar,
         lora_alpha=loraa,
         lora_dropout=loradropout,
-        target_modules=["q_proj", "o_proj", "k_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
+        target_modules= targetmodule.value,
         bias="none",
     )
 
     # 저장 폴더 설정
-    outName = f"{model_id.split('/')[-1]}-{epochs}-{batch_size}-{gradient_step}-{learning_rate}-{lorar}-{loraa}-{loradropout}"
+    outName = f"{model_id.split('/')[-1]}-{epochs}-{batch_size}-{gradient_step}-{learning_rate}-{lorar}-{loraa}-{loradropout}-{targetmodule}"
     output_dir = f"./99_GitLoss/01_RoLaModels/{outName}"
 
     # 학습 설정
@@ -185,13 +190,22 @@ def model_load(model_type:ModelType, use_quantization:bool):
         quantization_config = None  # 양자화 없음
 
     # 모델 및 토크나이져 로드드
-    model = AutoModelForCausalLM.from_pretrained(
+    if ModelType.GOOGLE_GEMMA3_12B_IT == model_type: 
+        model = Gemma3ForCausalLM.from_pretrained(
+        model_id, 
+        device_map = "auto", 
+        torch_dtype=torch_dtype,
+        quantization_config=quantization_config,
+        )
+    else :
+        model = AutoModelForCausalLM.from_pretrained(
         model_id,
-        device_map="auto",  # 자동으로 GPU 할당
+        device_map="auto",  # {"":0}, 자동으로 GPU 할당 
         torch_dtype=torch_dtype,  # 양자화 안 하면 bfloat16 적용
         quantization_config=quantization_config,  # 양자화 적용 여부
         trust_remote_code= True if 'exaone' in model_id.lower() else False,  # 원격 코드 신뢰 여부
-      )
+        )
+            
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
     return model, tokenizer
@@ -213,6 +227,7 @@ def merge_model_load(model_type:ModelType, lora_path: str, use_quantization : Fa
 
     lora_model, tokenizer = lora_model_load(model_type, lora_path, use_quantization)
     merged_model  = lora_model.merge_and_unload() #실제 병합
+    print(type(merged_model)) 
 
     return merged_model, tokenizer
 
@@ -236,33 +251,33 @@ def model_save(model, tokenizer, save_path: str):
     model.save_pretrained(save_path)
     tokenizer.save_pretrained(save_path)
 
-def chat_response(model, tokenizer, user_input , max_tokens=1024, do_sample=False):
+def chat_response(model, tokenizer, user_input, max_tokens=1024, temperature = 0.7, top_p = 0.95,  do_sample=False, system_prompt = ""):
     """
     범용적으로 사용할 수 있는 챗봇 응답 생성 함수.
-    
-    Args:
-        model: Pre-trained LLM 모델
-        tokenizer: 모델에 맞는 토크나이저
-        user_input (str): 사용자의 질문
-        system_prompt (str): 시스템 역할 프롬프트
-        max_tokens (int): 최대 생성할 토큰 수
-        do_sample (bool): 샘플링 사용 여부 (False이면 결정론적 응답)
-    Returns:
-        str: 모델이 생성한 응답
     """
+    default_system_prompt = (
+        "당신은 사용자의 요청에만 충실하게 답변하는 사실 기반의 중립적인 AI 어시스턴트입니다.\n\n"
 
-    system_prompt = (
-    "You are a reliable and trustworthy AI assistant. Please follow these guidelines:\n\n"
-    "1. Always provide accurate and verified information based on facts. Do not generate false or speculative content under any circumstances.\n"
-    "2. If you are unsure or lack sufficient information, respond with 'I don't know' or indicate that more context is needed.\n"
-    "3. Always maintain a polite, respectful, and professional tone regardless of the user's behavior. Keep your language neutral and unbiased.\n"
-    "4. Remember the context of previous interactions and maintain consistency throughout multi-turn conversations.\n"
-    "5. Ensure your responses are logically structured and well-organized. Provide detailed explanations when necessary, but avoid unnecessary repetition.\n"
-    "6. Do not include biased, offensive, or speculative statements. Avoid expressing personal opinions unless explicitly requested.\n"
-    "7. Adapt your tone and style based on the user’s intent, level of formality, and the nature of the question."
+        "역할 (ROLE):\n"
+        "- 당신은 일반 지식, 상식, 정보성 질문에 정확하게 답변하는 데 특화되어 있습니다.\n"
+
+        "제한 사항 (RESTRICTIONS):\n"
+        "- 사용자의 의도를 추측하거나 유추하지 말고, 입력된 문장에 명시적으로 나타난 단어에만 기반하여 판단하십시오.\n"
+        "- 반드시 **한글로만** 답변하십시오. 영어를 포함한 다른 언어는 절대 사용하지 마십시오.\n\n"
+
+        "사용자 의도 분류 (INTENT CLASSIFICATION):\n"
+        "- 숨겨진 의도나 배경을 추측하지 말고, 명확히 표현된 단어와 문장에만 기반하여 응답하십시오.\n\n"
+
+        "행동 원칙 (BEHAVIOR):\n"
+        "- 답변할 수 없는 경우에는 '모르겠습니다.' 또는 '추가 설명이 필요합니다.'라고 응답하십시오.\n"
+        "- 응답은 간결하고, 사실에 기반하며, 질문에 직접적으로 관련된 내용만 포함해야 합니다.\n"
+        "- 항상 정중하고, 중립적이며, 정보를 전달하는 어조를 유지하십시오.\n"
     )
 
-    # 메시지 구성
+
+    if not system_prompt:
+        system_prompt = default_system_prompt
+
     message = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_input}
@@ -282,9 +297,9 @@ def chat_response(model, tokenizer, user_input , max_tokens=1024, do_sample=Fals
             source.to(model.device),
             max_new_tokens=max_tokens,
             eos_token_id=tokenizer.eos_token_id,
-            temperature=0.7,
-            top_p=0.9,
-            do_sample=do_sample
+            temperature= temperature,
+            top_p= top_p,
+            do_sample=do_sample #True 여야 다양성 반영됨
         )
 
     # 출력 변환 및 정리
@@ -296,34 +311,34 @@ def chat_response(model, tokenizer, user_input , max_tokens=1024, do_sample=Fals
 # 모델별 Chat Template
 chat_templates = {
     #EXAONE, LLAMA, GEMMA, ALPACA 외 다른 템플릿이 필요하면 추가
+    #You are EXAONE model from LG AI Research, a helpful assistant.
     "EXAONE": """[|system|]You are EXAONE model from LG AI Research, a helpful assistant.[|endofturn|]
 
-[|user|]{INPUT}
-
+[|user|]
+[Category: {CATEGORY}]
+{INPUT}
 [|assistant|]{OUTPUT}[|endofturn|]""",
 
     "LLAMA": """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-아래는 작업을 설명하는 지시사항입니다. 입력된 내용을 바탕으로 적절한 응답을 작성하세요.<|eot_id|><|start_header_id|>user<|end_header_id|>
+Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.<|eot_id|><|start_header_id|>user<|end_header_id|>
 
+[Category: {CATEGORY}]
 {INPUT}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
 {OUTPUT}<|eot_id|>""",
 
-    "GEMMA": """<start_of_turn>system
-### SYSTEM:
-아래는 작업을 설명하는 지시사항입니다. 입력된 내용을 바탕으로 적절한 응답을 작성하세요.
+    "GEMMA": """<bos><start_of_turn>system
+Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
 <end_of_turn>
 <start_of_turn>user
-### INSTRUCTION:
-{INPUT}
-<end_of_turn>
+[Category: {CATEGORY}]
+{INPUT}<end_of_turn>
 <start_of_turn>model
-### RESPONSE:
 {OUTPUT}
 <end_of_turn>""",
 
     "ALPACA": """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
-
+[Category: {CATEGORY}]
 ### Instruction:
 {INPUT}
 
@@ -350,18 +365,25 @@ def format_dataset(model_type: ModelType, train_data_files : str, test_data_file
         return {
             "text": matched_template.format(
                 INPUT=examples["instruction"].strip(),
-                OUTPUT=examples["output"].strip()
+                OUTPUT=examples["output"].strip(),
+                CATEGORY=(examples.get("category") or "").strip()
             )
         }
 
     # 학습 데이터 로드
     train_dataset = load_dataset("json", data_files=train_data_files)
     train_dataset = train_dataset.map(formatting_prompts_func, remove_columns=['instruction', 'output'])
-
+    print(f"[TrainDataLen] {len(train_dataset['train'])}")
     # 테스트 데이터 로드 (있을 경우만)
     test_dataset = None
     if test_data_files:
         test_dataset = load_dataset("json", data_files=test_data_files)
         test_dataset = test_dataset.map(formatting_prompts_func, remove_columns=['instruction', 'output'])
+        print(f"[TestDataLen] {len(test_dataset['train'])}")
 
     return train_dataset, test_dataset
+
+
+
+
+
