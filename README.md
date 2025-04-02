@@ -1,76 +1,86 @@
-## 사용방법
+## 프로젝트 개요
 
-1. **02_Scripts폴더의 SFT_meta__Llama-3.1-8B-Instruct.ipynb을 실행 시켜 사용해보세요.**
+본 프로젝트는 **PEFT**, **LoRA**, **Unsloth**, **RAG**를 활용한 **LLM 파인튜닝 파이프라인**을 쉽고 효율적으로 구축할 수 있도록 구성된 프레임워크입니다.  
+복잡한 설정 없이 `.py` 스크립트 하나로 학습부터 병합, 추론까지 가능하도록 설계되었습니다.
 
-2. 02_Scripts폴더에 `peft_trainer.py`라는 **LLaMA, EXAONE, Gemma 등의 대형 언어 모델(LLM)** 을 **LoRA(저비용 적응 학습) 방식으로 미세 조정(Fine-tuning)** 하고, 학습된 모델을 병합 및 활용할 수 있는 Python 스크립트를 추가하였습니다. 또한 학습된 모델을 병합하고 **챗봇 응답 생성**까지 지원합니다. **모든 모델은 ModelType으로 관리됩니다.**
+-  **LoRA + PEFT**: 대형 언어 모델을 경량화하여 메모리 효율적으로 학습 가능
+-  **Unsloth**: GPU 메모리를 최대 30% 절약하며 빠르게 학습하는 고속 파인튜닝 방식
+-  **RAG (Retrieval-Augmented Generation)**: 외부 문서를 기반으로 하는 지식 기반 QA 가능
+-  **모듈화된 `.py` 스크립트**: 복잡한 학습/추론 코드를 하나의 함수로 실행 가능하도록 정리
 
-3. unsloth 사용 방법에 대한 unsloth_Llama-3.1.ipynb, peft_unsloth_trainer.py 추가 하였습니다.
+## 주요 기능
+-  Hugging Face + PEFT 기반 LoRA 학습 자동화
+-  Unsloth 기반 고속 파인튜닝 지원 (적은 VRAM 사용)
+-  다양한 모델 지원: LLaMA3, EXAONE, Gemma 등
+-  채팅 템플릿 자동화 + 프롬프트 기반 응답 생성
+-  RAG 기반 질문응답 시스템 연동 가능
+-  `.py` 하나로 학습/병합/추론을 수행하는 간편함
+
 
 좀 더 자세한 설명은 https://usingsystem.tistory.com/560 에 있습니다.
 
-## peft_trainer.py 사용방법
-### 1️⃣ 모델 로드 및 양자화 지원 (4-bit / 8-bit)
+📁 프로젝트 구조 및 주요 파일 설명
 
-- `AutoModelForCausalLM.from_pretrained()`을 사용하여 **LLaMA, EXAONE, Gemma** 등 다양한 모델 로드
-- `BitsAndBytesConfig`를 이용한 **4-bit 양자화** 지원 (`bnb_config`)
-- 양자화 모델 훈련을 위한 `prepare_model_for_kbit_training()` 적용
-- `gradient_checkpointing_enable()`을 사용하여 **VRAM 절약**
-```python
-from peft_trainer import trainSFT
+- peft_trainer.py
+    - Hugging Face 기반의 LoRA 학습 전체 파이프라인 구현.
+    - 모델 로드, 양자화 설정, 학습/저장, 채팅 추론 함수까지 포함된 메인 스크립트입니다.
 
-model, tokenizer = trainSFT(
-    ModelType.META_LLAMA3_1_8B_INSTRUCT,
-    train_data_path="./data/train.json",
-    test_data_path="./data/val.json",
-    batch_size=4,
-    epochs=2,
-    learning_rate=5e-5,
-    wandb_key="my_wandb_api_key"
-)
-```
+- peft_unsloth_trainer.py
+    - Unsloth 라이브러리를 활용한 고속 LoRA 학습 스크립트.
+    - VRAM 절약 및 빠른 학습을 위해 최적화되어 있으며, inference-ready 모델로 저장까지 자동화합니다.
 
-### 2️⃣ LoRA 기반 미세 조정 (Fine-Tuning)
+- peft_client.ipynb
+    - `peft_trainer.py`의 기능을 실습하는 노트북 예제.
+    - 모델 학습, 채팅 추론, LoRA 병합 등을 테스트할 수 있습니다.
 
-- `LoraConfig`를 활용하여 **특정 가중치만 업데이트**하여 메모리 사용량을 줄이고 빠르게 학습 가능
-- `peft_trainer`를 활용하여 **LoRA 방식**으로 모델 학습
-- 학습 데이터셋을 **Chat 형식**에 맞게 변환 후 훈련
+- peft_meta__Llama-3.1-8B-Instruct.ipynb
+    - Meta의 LLaMA3.1-8B-Instruct 모델을 대상으로 한 학습/추론 실험 노트북.
+    - `peft_trainer.py` 기반 실행 예제 포함.
 
-### 3️⃣ 학습된 모델 저장 및 병합
+- unsloth_Llama-3.1.ipynb
+    - `peft_unsloth_trainer.py`를 이용한 Unsloth 방식 LLaMA3.1 학습 실습 노트북.
+    -  빠른 학습과 메모리 절약 성능을 직접 확인할 수 있습니다.
 
-- 학습된 LoRA 모델을 원본 모델과 병합하는 `merge_lora_model()`, `merge_lora_model_save()`
-- 병합된 모델을 저장하여 **추론 시 LoRA 없이 모델 실행 가능**
-```python
-from TrainSFT import merge_lora_model_save
+- OllamaRAG.ipynb
+    - Ollama + RAG 기반 문서 검색 & 질문 응답 파이프라인 노트북.
+    - 외부 문서를 불러와 모델과 결합하여 지식 기반 QA를 구현합니다.
 
-merge_lora_model_save(
-    ModelType.META_LLAMA3_1_8B_INSTRUCT,
-    lora_path="./saved_models/LoRA",
-    save_path="./final_models/Llama-3-8B-LoRA"
-)
-```
+- 00_Data/
+    - KoAlpaca 형식의 JSON 데이터 저장 폴더. 학습/평가용으로 사용됩니다.
 
-### 4️⃣ 챗봇 응답 생성
+- 01_GitLoss/
+    - 학습된 모델 및 LoRA 어댑터 결과가 저장되는 출력 폴더입니다.
 
-- `chat_response()` 함수를 통해 **훈련된 모델을 사용하여 채팅 스타일 응답 생성**
-- 다양한 모델별 템플릿(`chat_templates`)을 적용하여 **적절한 챗봇 스타일 유지**
-```python
-from TrainSFT import chat_response
+## 과적합 및 과소적합 방지 방법
 
-response = chat_response(
-    model, tokenizer,
-    user_input="지구에 대해 설명해줘."
-)
-print(response)
-```
+### 과적합 (Overfitting)
 
+모델이 훈련 데이터에만 지나치게 맞춰져, 새로운 입력에 일반화하지 못하는 경우입니다.
+- 학습 정확도는 높은데 검증 성능은 낮음
+- 추론 결과가 실제 입력과 동떨어지거나 반복적인 응답
 
-# Llama 3.1 LoRA 기반 PEFT 적용 가이드
+**해결 방법**
+-  학습률(`learning_rate`)을 **높이세요**
+-  배치 크기(`batch_size`)를 **증가**시키세요
+-  에포크 수(`epochs`)를 **줄이세요**
+-  일반적인 데이터셋과 **결합하여 다양성 확보**
+-  드롭아웃 비율(`lora_dropout`)을 **증가**하여 정규화 적용
 
-LoRA (Low-Rank Adaptation)는 LLM(대형 언어 모델)의 일부 파라미터만 미세 조정하여 메모리와 계산량을 절약하는 파인튜닝 기법입니다.
+### 과소적합 (Underfitting)
 
-Llama 3.1 모델에 LoRA를 적용하여 PEFT(Parameter-Efficient Fine-Tuning)를 수행하는 방법을 이론과 실전 코드 예제를 통해 단계별로 설명합니다.
+모델이 학습 데이터조차 제대로 학습하지 못하고 일반화에 실패하는 경우입니다.
+- 학습/검증 성능 모두 낮음
+- 출력이 의미 없거나 매우 단순함
+
+**해결 방법**
+- 학습률을 **낮추세요**
+- **더 많은 에포크**로 학습을 연장하세요
+- `rank`와 `alpha` 값을 **증가**시키세요  
+  (보통 `alpha ≥ rank`, `rank`는 4 ~ 64 범위가 일반적)
+- **도메인 특화 데이터셋**으로 모델의 집중력을 높이세요
 
 ---
+# 용어정리
 
 ## 📌 PEFT(LoRA)란 무엇인가?
 
