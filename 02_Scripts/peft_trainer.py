@@ -35,7 +35,7 @@ def get_model_id(model_type: ModelType):
 
 def train_sft(model_type : ModelType, use_quantization = True, max_seq_length = 1024,
             wandb_project = 'fintuning', wandb_key="", 
-            train_data_path="./00_Data/train_data_v6.json", test_data_path="./00_Data/eval_data_v6.json",
+            train_data_path="../00_Data/KoAlpaca_train.json", test_data_path="",
             lorar = 8, loraa = 16, loradropout = 0.05, targetmodule = LoraTarget.FULL,
             epochs= 2, batch_size = 4, gradient_step = 2, learning_rate = 1e-4):
 
@@ -86,8 +86,8 @@ def train_sft(model_type : ModelType, use_quantization = True, max_seq_length = 
     )
 
     # 저장 폴더 설정
-    outName = f"{model_id.split('/')[-1]}-{epochs}-{batch_size}-{gradient_step}-{learning_rate}-{lorar}-{loraa}-{loradropout}-{targetmodule}"
-    output_dir = f"./99_GitLoss/01_RoLaModels/{outName}"
+    outName = f"{model_id.split('/')[-1]}-{epochs}-{batch_size}-{gradient_step}-{learning_rate}-{lorar}-{loraa}-{loradropout}-{targetmodule.name}"
+    output_dir = f"../01_GitLoss/RoLaModels/{outName}"
 
     # 학습 설정
     train_args = TrainingArguments(
@@ -256,22 +256,7 @@ def chat_response(model, tokenizer, user_input, max_tokens=1024, temperature = 0
     범용적으로 사용할 수 있는 챗봇 응답 생성 함수.
     """
     default_system_prompt = (
-        "당신은 사용자의 요청에만 충실하게 답변하는 사실 기반의 중립적인 AI 어시스턴트입니다.\n\n"
-
-        "역할 (ROLE):\n"
-        "- 당신은 일반 지식, 상식, 정보성 질문에 정확하게 답변하는 데 특화되어 있습니다.\n"
-
-        "제한 사항 (RESTRICTIONS):\n"
-        "- 사용자의 의도를 추측하거나 유추하지 말고, 입력된 문장에 명시적으로 나타난 단어에만 기반하여 판단하십시오.\n"
-        "- 반드시 **한글로만** 답변하십시오. 영어를 포함한 다른 언어는 절대 사용하지 마십시오.\n\n"
-
-        "사용자 의도 분류 (INTENT CLASSIFICATION):\n"
-        "- 숨겨진 의도나 배경을 추측하지 말고, 명확히 표현된 단어와 문장에만 기반하여 응답하십시오.\n\n"
-
-        "행동 원칙 (BEHAVIOR):\n"
-        "- 답변할 수 없는 경우에는 '모르겠습니다.' 또는 '추가 설명이 필요합니다.'라고 응답하십시오.\n"
-        "- 응답은 간결하고, 사실에 기반하며, 질문에 직접적으로 관련된 내용만 포함해야 합니다.\n"
-        "- 항상 정중하고, 중립적이며, 정보를 전달하는 어조를 유지하십시오.\n"
+        "당신은 사용자의 요청에만 충실하게 답변하는 사실 기반의 중립적인 AI 어시스턴트입니다."
     )
 
 
